@@ -12,6 +12,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Zap, Eye, EyeOff, ArrowLeft, Mail, Lock } from "lucide-react"
 import Link from "next/link"
+import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -20,17 +22,28 @@ export default function LoginPage() {
     email: "",
     password: "",
   })
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
     setIsLoading(true)
 
-    // Simulate authentication - replace with actual Cognito integration
-    setTimeout(() => {
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: formData.email,
+      password: formData.password,
+    })
+
+    if (signInError) {
+      setError(signInError.message)
       setIsLoading(false)
-      // Redirect to dashboard on success
-      window.location.href = "/dashboard"
-    }, 2000)
+      return
+    }
+
+    // On successful login, redirect to dashboard
+    window.location.href = "/dashboard"
+
+    setIsLoading(false)
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,6 +82,7 @@ export default function LoginPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {error && <p className="text-red-500 text-center text-sm">{error}</p>}
                   <div className="space-y-2">
                     <Label htmlFor="email" className="text-sm font-medium">
                       Email

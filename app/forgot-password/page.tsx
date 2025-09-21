@@ -11,21 +11,31 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Zap, ArrowLeft, Mail, CheckCircle } from "lucide-react"
 import Link from "next/link"
+import { supabase } from '@/lib/supabase'
 
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [email, setEmail] = useState("")
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
     setIsLoading(true)
 
-    // Simulate password reset request - replace with actual Cognito integration
-    setTimeout(() => {
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/update-password`,
+    })
+
+    if (resetError) {
+      setError(resetError.message)
       setIsLoading(false)
-      setIsSubmitted(true)
-    }, 2000)
+      return
+    }
+
+    setIsSubmitted(true)
+    setIsLoading(false)
   }
 
   return (
@@ -84,6 +94,7 @@ export default function ForgotPasswordPage() {
                         onClick={() => {
                           setIsSubmitted(false)
                           setEmail("")
+                          setError(null) // Clear error on retry
                         }}
                       >
                         Try Different Email
@@ -95,6 +106,7 @@ export default function ForgotPasswordPage() {
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4">
+                    {error && <p className="text-red-500 text-center text-sm">{error}</p>}
                     <div className="space-y-2">
                       <Label htmlFor="email" className="text-sm font-medium">
                         Email

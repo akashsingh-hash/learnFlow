@@ -37,6 +37,8 @@ import {
   ArrowLeft,
 } from "lucide-react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabase"
+import { useEffect } from 'react'
 
 interface Task {
   id: string
@@ -59,68 +61,51 @@ export default function TasksPage() {
   const [filterStatus, setFilterStatus] = useState("all")
 
   // Mock tasks data - replace with real data from your backend
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: "1",
-      title: "Complete React Hooks tutorial",
-      description: "Learn useState, useEffect, and custom hooks",
-      priority: "high",
-      category: "daily",
-      status: "completed",
-      dueDate: "2024-01-15",
-      createdAt: "2024-01-10",
-      estimatedHours: 3,
-      tags: ["react", "javascript"],
-    },
-    {
-      id: "2",
-      title: "Build portfolio website",
-      description: "Create a responsive portfolio showcasing my projects",
-      priority: "medium",
-      category: "weekly",
-      status: "in-progress",
-      dueDate: "2024-01-20",
-      createdAt: "2024-01-08",
-      estimatedHours: 12,
-      tags: ["portfolio", "html", "css"],
-    },
-    {
-      id: "3",
-      title: "Study Node.js fundamentals",
-      description: "Learn server-side JavaScript and Express.js",
-      priority: "high",
-      category: "daily",
-      status: "todo",
-      dueDate: "2024-01-16",
-      createdAt: "2024-01-12",
-      estimatedHours: 4,
-      tags: ["nodejs", "backend"],
-    },
-    {
-      id: "4",
-      title: "Complete database design course",
-      description: "Learn SQL, database normalization, and design patterns",
-      priority: "medium",
-      category: "monthly",
-      status: "todo",
-      dueDate: "2024-02-01",
-      createdAt: "2024-01-05",
-      estimatedHours: 20,
-      tags: ["database", "sql"],
-    },
-    {
-      id: "5",
-      title: "Practice coding challenges",
-      description: "Solve 5 LeetCode problems daily",
-      priority: "low",
-      category: "daily",
-      status: "in-progress",
-      dueDate: "2024-01-17",
-      createdAt: "2024-01-01",
-      estimatedHours: 2,
-      tags: ["algorithms", "practice"],
-    },
-  ])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [userId, setUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setUserId(user.id)
+        const { data, error } = await supabase
+          .from('user_tasks')
+          .select(`
+            id, title, description, priority, category, status, due_date, created_at, estimated_hours,
+            user_task_tags ( tags (name) )
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error("Error fetching tasks:", error)
+        } else {
+          setTasks(data.map(task => ({
+            ...task,
+            dueDate: task.due_date,
+            createdAt: new Date(task.created_at).toISOString().split('T')[0],
+            tags: task.user_task_tags.map((utt: any) => utt.tags.name)
+          })))
+        }
+      } else {
+        setUserId(null)
+        setTasks([])
+      }
+    }
+
+    fetchTasks()
+    // Listen for auth changes to refetch tasks if user logs in/out
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        fetchTasks()
+      }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [])
 
   const [newTask, setNewTask] = useState({
     title: "",
@@ -189,37 +174,127 @@ export default function TasksPage() {
     todo: tasks.filter((t) => t.status === "todo").length,
   }
 
-  const toggleTaskStatus = (taskId: string) => {
-    setTasks(
-      tasks.map((task) => {
-        if (task.id === taskId) {
-          const newStatus = task.status === "completed" ? "todo" : task.status === "todo" ? "in-progress" : "completed"
-          return { ...task, status: newStatus }
-        }
-        return task
-      }),
-    )
+  const toggleTaskStatus = async (taskId: string) => {
+    const taskToUpdate = tasks.find((task) => task.id === taskId)
+    if (!taskToUpdate || !userId) return
+
+    const newStatus = taskToUpdate.status === "completed" ? "todo" : taskToUpdate.status === "todo" ? "in-progress" : "completed"
+
+    const { error } = await supabase
+      .from('user_tasks')
+      .update({ status: newStatus })
+      .eq('id', taskId)
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error("Error updating task status:", error)
+      alert("Failed to update task status.")
+    } else {
+      setTasks(
+        tasks.map((task) =>
+          task.id === taskId ? { ...task, status: newStatus } : task
+        )
+      )
+    }
   }
 
-  const deleteTask = (taskId: string) => {
-    setTasks(tasks.filter((task) => task.id !== taskId))
+  const deleteTask = async (taskId: string) => {
+    if (!userId) return
+    const { error } = await supabase
+      .from('user_tasks')
+      .delete()
+      .eq('id', taskId)
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error("Error deleting task:", error)
+      alert("Failed to delete task.")
+    } else {
+      setTasks(tasks.filter((task) => task.id !== taskId))
+    }
   }
 
-  const addTask = () => {
-    const task: Task = {
-      id: Date.now().toString(),
+  const addTask = async () => {
+    if (!userId) {
+      alert("You must be logged in to add tasks.")
+      return
+    }
+    if (!newTask.title) {
+      alert("Task title is required.")
+      return
+    }
+
+    setIsAddDialogOpen(false)
+
+    const taskToInsert = {
+      user_id: userId,
       title: newTask.title,
       description: newTask.description,
       priority: newTask.priority,
       category: newTask.category,
       status: "todo",
-      dueDate: newTask.dueDate,
-      createdAt: new Date().toISOString().split("T")[0],
-      estimatedHours: newTask.estimatedHours,
-      tags: newTask.tags ? newTask.tags.split(",").map((tag) => tag.trim()) : [],
+      due_date: newTask.dueDate || null,
+      estimated_hours: newTask.estimatedHours,
     }
 
-    setTasks([...tasks, task])
+    const { data: insertedTask, error } = await supabase
+      .from('user_tasks')
+      .insert(taskToInsert)
+      .select()
+      .single()
+
+    if (error || !insertedTask) {
+      console.error("Error adding task:", error)
+      alert("Failed to add task.")
+      return
+    }
+
+    // Handle tags
+    const newTags = newTask.tags ? newTask.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : []
+    if (newTags.length > 0) {
+      for (const tagName of newTags) {
+        let { data: tagData, error: tagFetchError } = await supabase
+          .from('tags')
+          .select('id')
+          .eq('name', tagName)
+          .single()
+
+        if (tagFetchError && tagFetchError.code === 'PGRST116') { // No rows found
+          const { data: newTagData, error: tagInsertError } = await supabase
+            .from('tags')
+            .insert({ name: tagName })
+            .select('id')
+            .single()
+          if (tagInsertError) {
+            console.error("Error creating tag:", tagInsertError)
+            continue
+          }
+          tagData = newTagData
+        } else if (tagFetchError) {
+          console.error("Error fetching tag:", tagFetchError)
+          continue
+        }
+
+        if (tagData) {
+          const { error: userTaskTagError } = await supabase
+            .from('user_task_tags')
+            .insert({ user_task_id: insertedTask.id, tag_id: tagData.id })
+          if (userTaskTagError) console.error("Error saving user task tag:", userTaskTagError)
+        }
+      }
+    }
+
+    setTasks(prevTasks => [
+      {
+        ...insertedTask,
+        dueDate: insertedTask.due_date,
+        createdAt: new Date(insertedTask.created_at).toISOString().split('T')[0],
+        tags: newTags,
+        user_task_tags: newTags.map(tag => ({ tags: { name: tag } })) // For consistent data structure
+      },
+      ...prevTasks,
+    ])
+
     setNewTask({
       title: "",
       description: "",
@@ -229,7 +304,6 @@ export default function TasksPage() {
       estimatedHours: 1,
       tags: "",
     })
-    setIsAddDialogOpen(false)
   }
 
   return (

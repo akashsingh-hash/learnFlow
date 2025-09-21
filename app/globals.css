@@ -4,9 +4,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Updated color palette to match futuristic design brief */
+  /* Reverted to original color palette with vibrant red foreground */
   --background: oklch(1 0 0); /* #ffffff - white background */
-  --foreground: oklch(0.24 0 0); /* #1f2937 - dark gray text */
+  --foreground: oklch(60% 0.25 20); /* Vibrant red text */
   --card: oklch(0.98 0 0); /* #f8fafc - light gray card background */
   --card-foreground: oklch(0.35 0 0); /* #374151 - gray text on cards */
   --popover: oklch(1 0 0); /* #ffffff - white popover background */
@@ -41,9 +41,9 @@
 }
 
 .dark {
-  /* Updated dark theme colors for futuristic look */
+  /* Reverted to original dark theme colors with vibrant red foreground */
   --background: oklch(0.11 0 0); /* #0f172a - very dark background */
-  --foreground: oklch(0.98 0 0); /* #f8fafc - light text */
+  --foreground: oklch(60% 0.25 20); /* Vibrant red text */
   --card: oklch(0.15 0 0); /* #1e293b - dark card background */
   --card-foreground: oklch(0.98 0 0); /* #f8fafc - light text on cards */
   --popover: oklch(0.15 0 0); /* #1e293b - dark popover */

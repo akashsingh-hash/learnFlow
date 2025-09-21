@@ -122,7 +122,7 @@ export default function CreateRoadmapPage() {
   }
 
   const saveRoadmap = async () => {
-    // Here you would save the roadmap to your database
+    // The API route already saves the roadmap, so this function can just navigate.
     alert("Roadmap saved successfully!")
     window.location.href = "/dashboard"
   }

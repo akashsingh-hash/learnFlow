@@ -13,6 +13,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Zap, Eye, EyeOff, ArrowLeft, Mail, Lock, User } from "lucide-react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabase"
+import { useRouter } from 'next/navigation'
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -25,26 +27,57 @@ export default function SignupPage() {
     password: "",
     confirmPassword: "",
   })
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+
     if (!agreedToTerms) {
-      alert("Please agree to the terms and conditions")
+      setError("Please agree to the terms and conditions")
       return
     }
     if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match")
+      setError("Passwords do not match")
       return
     }
 
     setIsLoading(true)
 
-    // Simulate authentication - replace with actual Cognito integration
-    setTimeout(() => {
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
+          full_name: formData.name,
+        },
+      },
+    })
+
+    if (signUpError) {
+      setError(signUpError.message)
       setIsLoading(false)
-      // Redirect to dashboard on success
-      window.location.href = "/dashboard"
-    }, 2000)
+      return
+    }
+
+    if (data.user) {
+      // Insert into profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([{ id: data.user.id, full_name: formData.name, username: formData.email.split('@')[0] }]) // Simple username for now
+
+      if (profileError) {
+        setError(profileError.message)
+        setIsLoading(false)
+        return
+      }
+      alert("Account created successfully! Please check your email for verification.")
+      window.location.href = "/dashboard" // Redirect to dashboard or a verification page
+    } else {
+      setError("An unexpected error occurred.")
+    }
+
+    setIsLoading(false)
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,6 +116,7 @@ export default function SignupPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {error && <p className="text-red-500 text-center text-sm">{error}</p>}
                   <div className="space-y-2">
                     <Label htmlFor="name" className="text-sm font-medium">
                       Full Name

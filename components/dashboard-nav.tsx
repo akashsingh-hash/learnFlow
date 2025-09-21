@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -14,13 +14,59 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Zap, Bell, Settings, LogOut, User, HelpCircle, Menu, X } from "lucide-react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
 
 export function DashboardNav() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const router = useRouter()
 
-  const handleLogout = () => {
-    // Add logout logic here
-    window.location.href = "/"
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
+
+      if (user) {
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('full_name, username, avatar_url')
+          .eq('id', user.id)
+          .single()
+
+        if (error) {
+          console.error("Error fetching profile:", error)
+        } else {
+          setProfile(profileData)
+        }
+      }
+    }
+
+    fetchUser()
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') {
+        setUser(session?.user)
+        fetchUser()
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null)
+        setProfile(null)
+        router.push('/login') // Redirect to login on logout
+      }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [router])
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error("Error logging out:", error)
+    }
+    // Redirection is handled by the auth state change listener
   }
 
   return (
@@ -53,16 +99,16 @@ export function DashboardNav() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src="/student-avatar.png" alt="User" />
-                    <AvatarFallback>AC</AvatarFallback>
+                    <AvatarImage src={profile?.avatar_url || "/placeholder-user.jpg"} alt={profile?.full_name || "User"} />
+                    <AvatarFallback>{profile?.username?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">Alex Chen</p>
-                    <p className="text-xs leading-none text-muted-foreground">alex.chen@example.com</p>
+                    <p className="text-sm font-medium leading-none">{profile?.full_name || "User"}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user?.email || "Not logged in"}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -107,12 +153,12 @@ export function DashboardNav() {
             <div className="flex flex-col space-y-3">
               <div className="flex items-center space-x-3 px-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="/student-avatar.png" alt="User" />
-                  <AvatarFallback>AC</AvatarFallback>
+                  <AvatarImage src={profile?.avatar_url || "/placeholder-user.jpg"} alt={profile?.full_name || "User"} />
+                  <AvatarFallback>{profile?.username?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="text-sm font-medium">Alex Chen</p>
-                  <p className="text-xs text-muted-foreground">alex.chen@example.com</p>
+                  <p className="text-sm font-medium">{profile?.full_name || "User"}</p>
+                  <p className="text-xs text-muted-foreground">{user?.email || "Not logged in"}</p>
                 </div>
               </div>
 
