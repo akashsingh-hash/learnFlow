@@ -1,12 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Reverted to original color palette with vibrant red foreground */
+  /* Updated color palette to match futuristic design brief */
   --background: oklch(1 0 0); /* #ffffff - white background */
-  --foreground: oklch(60% 0.25 20); /* Vibrant red text */
+  --foreground: oklch(0.24 0 0); /* #1f2937 - dark gray text */
   --card: oklch(0.98 0 0); /* #f8fafc - light gray card background */
   --card-foreground: oklch(0.35 0 0); /* #374151 - gray text on cards */
   --popover: oklch(1 0 0); /* #ffffff - white popover background */
@@ -38,12 +39,15 @@
   --sidebar-accent-foreground: oklch(1 0 0); /* #ffffff - text on sidebar accent */
   --sidebar-border: oklch(0.91 0 0); /* #e5e7eb - sidebar border */
   --sidebar-ring: oklch(0.61 0.15 264 / 0.5); /* #6366f1 with opacity - sidebar focus ring */
+
+  --font-orbitron: 'Orbitron', sans-serif;
+  --font-poppins: 'Poppins', sans-serif;
 }
 
 .dark {
-  /* Reverted to original dark theme colors with vibrant red foreground */
+  /* Updated dark theme colors for futuristic look */
   --background: oklch(0.11 0 0); /* #0f172a - very dark background */
-  --foreground: oklch(60% 0.25 20); /* Vibrant red text */
+  --foreground: oklch(0.98 0 0); /* #f8fafc - light text */
   --card: oklch(0.15 0 0); /* #1e293b - dark card background */
   --card-foreground: oklch(0.98 0 0); /* #f8fafc - light text on cards */
   --popover: oklch(0.15 0 0); /* #1e293b - dark popover */
@@ -128,6 +132,5 @@
   }
   /* Added heading font utility class */
   .font-heading {
-    font-family: var(--font-heading);
   }
 }
