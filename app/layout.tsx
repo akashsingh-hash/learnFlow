@@ -6,6 +6,9 @@ import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { createClient } from "@/lib/supabase-server" // Correct import for server-side client
+import { SupabaseProvider } from "./supabase-provider" // Correct import for client-side provider
+import { Session } from "@supabase/supabase-js" // Import Session type
 
 const orbitron = Orbitron({
   subsets: ["latin"],
@@ -26,11 +29,14 @@ export const metadata: Metadata = {
   generator: "v0.app",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
@@ -38,7 +44,9 @@ export default function RootLayout({
           fontSansVariable={poppins.variable}
           fontHeadingVariable={orbitron.variable}
         >
-          <Suspense fallback={null}>{children}</Suspense>
+          <SupabaseProvider session={session}>
+            <Suspense fallback={null}>{children}</Suspense>
+          </SupabaseProvider>
           <Analytics />
         </ThemeProvider>
       </body>

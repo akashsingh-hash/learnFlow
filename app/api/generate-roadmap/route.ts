@@ -1,7 +1,6 @@
-import { openai } from "@ai-sdk/openai"
-import { generateObject } from "ai"
-import { z } from "zod"
-import { supabase } from '@/lib/supabase'
+import { z } from "zod";
+import { createClient } from '@/lib/supabase-server'; // Import server-side client
+import { GoogleGenerativeAI } from "@google/generative-ai"; // Import the GoogleGenerativeAI SDK
 
 const roadmapSchema = z.object({
   title: z.string().describe("The title of the learning roadmap"),
@@ -10,16 +9,14 @@ const roadmapSchema = z.object({
   difficulty: z.enum(["Beginner", "Intermediate", "Advanced"]),
   milestones: z.array(
     z.object({
-      id: z.string(),
       title: z.string(),
       description: z.string(),
       estimatedWeeks: z.number(),
       tasks: z.array(
         z.object({
-          id: z.string(),
           title: z.string(),
           description: z.string(),
-          type: z.enum(["reading", "practice", "project", "quiz", "video"]),
+          type: z.enum(["reading", "practice", "project", "video", "other"]),
           estimatedHours: z.number(),
           resources: z.array(z.string()).optional(),
         }),
@@ -32,20 +29,25 @@ const roadmapSchema = z.object({
     z.object({
       title: z.string(),
       url: z.string().optional(),
-      type: z.enum(["book", "course", "documentation", "tutorial", "practice"]),
+      type: z.enum(["book", "course", "documentation", "tutorial", "practice", "other"]),
     }),
   ),
-})
+});
 
 export async function POST(req: Request) {
   try {
-    const { goal, timeframe, currentLevel, preferences } = await req.json()
+    const { goal, timeframe, currentLevel, preferences } = await req.json();
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 })
+      console.error("API Route: User not authenticated:", authError);
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Use gemini-1.5-flash as per latest user change
 
     const prompt = `Create a comprehensive learning roadmap for: "${goal}"
 
@@ -61,16 +63,23 @@ Requirements:
 - Provide realistic time estimates
 - Include relevant resources and prerequisites
 - Make it actionable and measurable
+- The entire response MUST be a single JSON object adhering strictly to the following TypeScript interface (do not include any other text or markdown outside the JSON):
+  ${JSON.stringify(roadmapSchema.shape, null, 2)}
 
-Focus on practical, hands-on learning with clear progression from basics to advanced concepts.`
+Focus on practical, hands-on learning with clear progression from basics to advanced concepts.`;
 
-    const { object } = await generateObject({
-      model: openai("gpt-4o"),
-      schema: roadmapSchema,
-      prompt,
-      maxTokens: 3000,
-      temperature: 0.7,
-    })
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json", // Request JSON output
+      },
+    });
+
+    const rawText = result.response.text();
+    const object = JSON.parse(rawText); // Parse the JSON string to an object
+
+    // Validate the parsed object against the schema
+    roadmapSchema.parse(object);
 
     // Save generated roadmap to Supabase
     const { data: roadmapData, error: roadmapError } = await supabase
@@ -83,11 +92,11 @@ Focus on practical, hands-on learning with clear progression from basics to adva
         difficulty: object.difficulty,
       })
       .select()
-      .single()
+      .single();
 
     if (roadmapError || !roadmapData) {
-      console.error("Error saving roadmap:", roadmapError)
-      return Response.json({ error: "Failed to save roadmap" }, { status: 500 })
+      console.error("Error saving roadmap:", roadmapError);
+      return Response.json({ error: "Failed to save roadmap" }, { status: 500 });
     }
 
     // Save milestones and tasks
@@ -102,11 +111,11 @@ Focus on practical, hands-on learning with clear progression from basics to adva
             estimated_weeks: milestone.estimatedWeeks,
           })
           .select()
-          .single()
+          .single();
 
         if (milestoneError || !milestoneData) {
-          console.error("Error saving milestone:", milestoneError)
-          continue
+          console.error("Error saving milestone:", milestoneError);
+          continue;
         }
 
         // Save tasks for the milestone
@@ -122,11 +131,11 @@ Focus on practical, hands-on learning with clear progression from basics to adva
                 estimated_hours: task.estimatedHours,
               })
               .select()
-              .single()
+              .single();
 
             if (taskError || !taskData) {
-              console.error("Error saving roadmap task:", taskError)
-              continue
+              console.error("Error saving roadmap task:", taskError);
+              continue;
             }
 
             // Save task resources
@@ -136,29 +145,29 @@ Focus on practical, hands-on learning with clear progression from basics to adva
                   .from('resources')
                   .select('id')
                   .eq('url', resourceUrl) // Assuming URL is unique for a resource
-                  .single()
+                  .single();
 
                 if (resourceFetchError && resourceFetchError.code === 'PGRST116') { // No rows found
                   const { data: newResourceData, error: resourceInsertError } = await supabase
                     .from('resources')
                     .insert({ title: resourceUrl, url: resourceUrl, type: 'other' }) // Default to 'other' type, title as URL
                     .select('id')
-                    .single()
+                    .single();
                   if (resourceInsertError) {
-                    console.error("Error creating resource for task:", resourceInsertError)
-                    continue
+                    console.error("Error creating resource for task:", resourceInsertError);
+                    continue;
                   }
-                  resourceData = newResourceData
+                  resourceData = newResourceData;
                 } else if (resourceFetchError) {
-                  console.error("Error fetching resource for task:", resourceFetchError)
-                  continue
+                  console.error("Error fetching resource for task:", resourceFetchError);
+                  continue;
                 }
 
                 if (resourceData) {
                   const { error: roadmapTaskResourceError } = await supabase
                     .from('roadmap_task_resources')
                     .insert({ roadmap_task_id: taskData.id, resource_id: resourceData.id })
-                  if (roadmapTaskResourceError) console.error("Error saving roadmap task resource:", roadmapTaskResourceError)
+                  if (roadmapTaskResourceError) console.error("Error saving roadmap task resource:", roadmapTaskResourceError);
                 }
               }
             }
@@ -170,9 +179,9 @@ Focus on practical, hands-on learning with clear progression from basics to adva
           const prerequisitesToInsert = milestone.prerequisites.map((prereq) => ({
             milestone_id: milestoneData.id,
             prerequisite_description: prereq,
-          }))
-          const { error: prereqError } = await supabase.from('milestone_prerequisites').insert(prerequisitesToInsert)
-          if (prereqError) console.error("Error saving prerequisites:", prereqError)
+          }));
+          const { error: prereqError } = await supabase.from('milestone_prerequisites').insert(prerequisitesToInsert);
+          if (prereqError) console.error("Error saving prerequisites:", prereqError);
         }
       }
     }
@@ -184,29 +193,29 @@ Focus on practical, hands-on learning with clear progression from basics to adva
           .from('tags')
           .select('id')
           .eq('name', tagName)
-          .single()
+          .single();
 
         if (tagFetchError && tagFetchError.code === 'PGRST116') { // No rows found
           const { data: newTagData, error: tagInsertError } = await supabase
             .from('tags')
             .insert({ name: tagName })
             .select('id')
-            .single()
+            .single();
           if (tagInsertError) {
-            console.error("Error creating tag:", tagInsertError)
-            continue
+            console.error("Error creating tag:", tagInsertError);
+            continue;
           }
-          tagData = newTagData
+          tagData = newTagData;
         } else if (tagFetchError) {
-          console.error("Error fetching tag:", tagFetchError)
-          continue
+          console.error("Error fetching tag:", tagFetchError);
+          continue;
         }
 
         if (tagData) {
           const { error: roadmapTagError } = await supabase
             .from('roadmap_tags')
             .insert({ roadmap_id: roadmapData.id, tag_id: tagData.id })
-          if (roadmapTagError) console.error("Error saving roadmap tag:", roadmapTagError)
+          if (roadmapTagError) console.error("Error saving roadmap tag:", roadmapTagError);
         }
       }
     }
@@ -218,36 +227,36 @@ Focus on practical, hands-on learning with clear progression from basics to adva
           .from('resources')
           .select('id')
           .eq('url', resource.url) // Assuming URL is unique for a resource
-          .single()
+          .single();
 
         if (resourceFetchError && resourceFetchError.code === 'PGRST116') { // No rows found
           const { data: newResourceData, error: resourceInsertError } = await supabase
             .from('resources')
             .insert({ title: resource.title, url: resource.url, type: resource.type })
             .select('id')
-            .single()
+            .single();
           if (resourceInsertError) {
-            console.error("Error creating resource:", resourceInsertError)
-            continue
+            console.error("Error creating resource:", resourceInsertError);
+            continue;
           }
-          resourceData = newResourceData
+          resourceData = newResourceData;
         } else if (resourceFetchError) {
-          console.error("Error fetching resource:", resourceFetchError)
-          continue
+          console.error("Error fetching resource:", resourceFetchError);
+          continue;
         }
 
         if (resourceData) {
           const { error: roadmapResourceError } = await supabase
             .from('roadmap_resources')
             .insert({ roadmap_id: roadmapData.id, resource_id: resourceData.id })
-          if (roadmapResourceError) console.error("Error saving roadmap resource:", roadmapResourceError)
+          if (roadmapResourceError) console.error("Error saving roadmap resource:", roadmapResourceError);
         }
       }
     }
 
-    return Response.json({ roadmap: object })
+    return Response.json({ roadmap: object });
   } catch (error) {
-    console.error("Error generating roadmap:", error)
-    return Response.json({ error: "Failed to generate roadmap" }, { status: 500 })
+    console.error("Error generating roadmap:", error);
+    return Response.json({ error: "Failed to generate roadmap" }, { status: 500 });
   }
 }
