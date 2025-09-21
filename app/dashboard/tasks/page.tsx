@@ -37,7 +37,7 @@ import {
   ArrowLeft,
 } from "lucide-react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabaseBrowser } from "@/lib/supabase-client"
 import { useEffect } from 'react'
 
 interface Task {
@@ -66,9 +66,10 @@ export default function TasksPage() {
 
   useEffect(() => {
     const fetchTasks = async () => {
+      const supabase = supabaseBrowser();
       const { data: { user } } = await supabase.auth.getUser()
+      setUserId(user?.id)
       if (user) {
-        setUserId(user.id)
         const { data, error } = await supabase
           .from('user_tasks')
           .select(`
@@ -96,7 +97,7 @@ export default function TasksPage() {
 
     fetchTasks()
     // Listen for auth changes to refetch tasks if user logs in/out
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListener } = supabaseBrowser().auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
         fetchTasks()
       }
@@ -180,7 +181,7 @@ export default function TasksPage() {
 
     const newStatus = taskToUpdate.status === "completed" ? "todo" : taskToUpdate.status === "todo" ? "in-progress" : "completed"
 
-    const { error } = await supabase
+    const { error } = await supabaseBrowser()
       .from('user_tasks')
       .update({ status: newStatus })
       .eq('id', taskId)
@@ -200,7 +201,7 @@ export default function TasksPage() {
 
   const deleteTask = async (taskId: string) => {
     if (!userId) return
-    const { error } = await supabase
+    const { error } = await supabaseBrowser()
       .from('user_tasks')
       .delete()
       .eq('id', taskId)
@@ -237,7 +238,7 @@ export default function TasksPage() {
       estimated_hours: newTask.estimatedHours,
     }
 
-    const { data: insertedTask, error } = await supabase
+    const { data: insertedTask, error } = await supabaseBrowser()
       .from('user_tasks')
       .insert(taskToInsert)
       .select()
@@ -253,14 +254,14 @@ export default function TasksPage() {
     const newTags = newTask.tags ? newTask.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : []
     if (newTags.length > 0) {
       for (const tagName of newTags) {
-        let { data: tagData, error: tagFetchError } = await supabase
+        let { data: tagData, error: tagFetchError } = await supabaseBrowser()
           .from('tags')
           .select('id')
           .eq('name', tagName)
           .single()
 
         if (tagFetchError && tagFetchError.code === 'PGRST116') { // No rows found
-          const { data: newTagData, error: tagInsertError } = await supabase
+          const { data: newTagData, error: tagInsertError } = await supabaseBrowser()
             .from('tags')
             .insert({ name: tagName })
             .select('id')
@@ -276,7 +277,7 @@ export default function TasksPage() {
         }
 
         if (tagData) {
-          const { error: userTaskTagError } = await supabase
+          const { error: userTaskTagError } = await supabaseBrowser()
             .from('user_task_tags')
             .insert({ user_task_id: insertedTask.id, tag_id: tagData.id })
           if (userTaskTagError) console.error("Error saving user task tag:", userTaskTagError)

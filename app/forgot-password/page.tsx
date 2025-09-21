@@ -11,24 +11,35 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Zap, ArrowLeft, Mail, CheckCircle } from "lucide-react"
 import Link from "next/link"
-import { supabase } from '@/lib/supabase'
+import { supabaseBrowser } from '@/lib/supabase-client'
+import { useRouter } from 'next/navigation'
 
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [email, setEmail] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setIsLoading(true)
 
+    if (!email) {
+      setError("Please enter your email.")
+      setIsLoading(false)
+      return
+    }
+
+    const supabase = supabaseBrowser();
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/update-password`,
     })
 
     if (resetError) {
+      console.error("Error resetting password:", resetError)
       setError(resetError.message)
       setIsLoading(false)
       return
@@ -107,6 +118,7 @@ export default function ForgotPasswordPage() {
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4">
                     {error && <p className="text-red-500 text-center text-sm">{error}</p>}
+                    {success && <p className="text-green-500 text-center text-sm">{success}</p>}
                     <div className="space-y-2">
                       <Label htmlFor="email" className="text-sm font-medium">
                         Email

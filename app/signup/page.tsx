@@ -13,7 +13,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Zap, Eye, EyeOff, ArrowLeft, Mail, Lock, User } from "lucide-react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabaseBrowser } from "@/lib/supabase-client"
 import { useRouter } from 'next/navigation'
 
 export default function SignupPage() {
@@ -44,6 +44,7 @@ export default function SignupPage() {
 
     setIsLoading(true)
 
+    const supabase = supabaseBrowser();
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: formData.email,
       password: formData.password,
@@ -62,9 +63,7 @@ export default function SignupPage() {
 
     if (data.user) {
       // Insert into profiles table
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([{ id: data.user.id, full_name: formData.name, username: formData.email.split('@')[0] }]) // Simple username for now
+      const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, full_name: formData.name, username: formData.email.split('@')[0] }]) // Simple username for now
 
       if (profileError) {
         setError(profileError.message)

@@ -10,7 +10,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { DashboardNav } from '@/components/dashboard-nav'
 import { User as UserIcon, Mail, Calendar, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabaseBrowser } from '@/lib/supabase-client'
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null)
@@ -26,6 +26,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchUserData = async () => {
       setLoading(true)
+      const supabase = supabaseBrowser();
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
 
@@ -51,7 +52,7 @@ export default function ProfilePage() {
 
     fetchUserData()
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListener } = supabaseBrowser().auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
         fetchUserData()
       }
@@ -69,6 +70,7 @@ export default function ProfilePage() {
     if (!user) return
 
     setLoading(true)
+    const supabase = supabaseBrowser();
     const { error } = await supabase
       .from('profiles')
       .update({ full_name: fullName, username: username, avatar_url: avatarUrl })
@@ -81,7 +83,7 @@ export default function ProfilePage() {
       setSuccess("Profile updated successfully!")
       setEditMode(false)
       // Re-fetch to ensure UI is consistent
-      const { data: updatedProfileData, error: fetchError } = await supabase
+      const { data: updatedProfileData, error: fetchError } = await supabaseBrowser()
         .from('profiles')
         .select('full_name, username, avatar_url, member_since, learning_level')
         .eq('id', user.id)

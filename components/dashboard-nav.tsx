@@ -14,7 +14,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Zap, Bell, Settings, LogOut, User, HelpCircle, Menu, X } from "lucide-react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabaseBrowser } from "@/lib/supabase-client"
 import { useRouter } from "next/navigation"
 
 export function DashboardNav() {
@@ -25,6 +25,7 @@ export function DashboardNav() {
 
   useEffect(() => {
     const fetchUser = async () => {
+      const supabase = supabaseBrowser();
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
 
@@ -45,7 +46,7 @@ export function DashboardNav() {
 
     fetchUser()
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListener } = supabaseBrowser().auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN') {
         setUser(session?.user)
         fetchUser()
@@ -62,7 +63,7 @@ export function DashboardNav() {
   }, [router])
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut()
+    const { error } = await supabaseBrowser().auth.signOut()
     if (error) {
       console.error("Error logging out:", error)
     }

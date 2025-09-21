@@ -22,7 +22,7 @@ import {
   BarChart3,
 } from "lucide-react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabaseBrowser } from "@/lib/supabase-client"
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("roadmap")
@@ -40,9 +40,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      const { data: { user: fetchedUser } } = await supabase.auth.getUser()
+      const supabase = supabaseBrowser(); // Get the client-side Supabase instance
+      const { data: { user: fetchedUser }, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.error("Error fetching user:", userError);
+      }
+      console.log("Fetched User:", fetchedUser);
       setCurrentUser(fetchedUser)
-      if (!fetchedUser) return
+      if (!fetchedUser) {
+        console.log("No user fetched, returning from dashboard data fetch.");
+        return
+      }
 
       // Fetch Roadmaps
       const { data: roadmapsData, error: roadmapsError } = await supabase
@@ -57,6 +65,7 @@ export default function DashboardPage() {
       if (roadmapsError) {
         console.error("Error fetching roadmaps:", roadmapsError)
       } else {
+        console.log("Fetched Roadmaps:", roadmapsData);
         setRoadmaps(roadmapsData.map(roadmap => ({
           ...roadmap,
           timeLeft: roadmap.status === 'completed' ? "Completed" : roadmap.estimated_duration,
@@ -78,6 +87,7 @@ export default function DashboardPage() {
       if (userTasksError) {
         console.error("Error fetching user tasks:", userTasksError)
       } else {
+        console.log("Fetched User Tasks:", userTasksData);
         totalUserTasks = userTasksData.length
         totalCompletedTasks = userTasksData.filter(task => task.status === 'completed').length
         // Filter for upcoming tasks (e.g., due today or this week)
@@ -100,7 +110,7 @@ export default function DashboardPage() {
       // Fetch profile for member_since and calculate study streak (mock for now)
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('full_name, member_since, learning_level') // Also fetch full_name for the welcome message
+        .select('full_name, member_since, learning_level, username') // Also fetch full_name for the welcome message
         .eq('id', fetchedUser.id)
         .single()
       
@@ -108,6 +118,7 @@ export default function DashboardPage() {
       if (profileError) {
         console.error("Error fetching profile for streak:", profileError)
       } else {
+        console.log("Fetched Profile Data:", profileData);
         // Mock study streak for now, as it requires more complex logic (e.g., daily activity logging)
         studyStreak = 12; // Placeholder
         setProfile(profileData) // Set the profile data here
@@ -140,7 +151,7 @@ export default function DashboardPage() {
     fetchDashboardData()
     
     // Setup auth listener for real-time updates if needed (e.g., user logs in/out)
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListener } = supabaseBrowser().auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN') {
         setCurrentUser(session?.user); // Update currentUser on sign-in
         fetchDashboardData();

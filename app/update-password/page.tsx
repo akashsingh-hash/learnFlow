@@ -9,7 +9,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Zap, ArrowLeft, Lock, Eye, EyeOff, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabaseBrowser } from '@/lib/supabase-client'
 import { useRouter } from 'next/navigation'
 
 export default function UpdatePasswordPage() {
@@ -44,6 +44,7 @@ export default function UpdatePasswordPage() {
 
     setIsLoading(true)
 
+    const supabase = supabaseBrowser();
     const { error: updateError } = await supabase.auth.updateUser({
       password: password,
     })
